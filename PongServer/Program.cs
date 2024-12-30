@@ -24,6 +24,9 @@ namespace PongServer
 
       app.Use(async (context, next) =>
       {
+        // TODO lobbies
+        //   (host creates lobby with name, guest can type lobby name to join host)
+        // perhaps another endpoint for create lobby and for join lobby. then once two players are in a lobby, tell the client to open the WS?
         if (context.Request.Path == "/ws")
         {
           if (context.WebSockets.IsWebSocketRequest)
@@ -31,7 +34,7 @@ namespace PongServer
             try
             {
               using var ws = await context.WebSockets.AcceptWebSocketAsync();
-              await Echo(ws);
+              await Handle(ws);
             }
             catch (System.Net.WebSockets.WebSocketException wsEx)
             {
@@ -56,6 +59,27 @@ namespace PongServer
       });
 
       app.Run();
+    }
+
+    private static async Task Handle(WebSocket ws)
+    {
+      Console.WriteLine("Socket opened");
+
+      var buffer = new byte[16];
+
+      while (ws.CloseStatus == null)
+      {
+        await ws.SendAsync(
+          new ArraySegment<byte>([(byte)DateTime.Now.Second]),
+          WebSocketMessageType.Binary,
+          true,
+          CancellationToken.None);
+
+        Thread.Sleep(500);
+        /*var recieveResult = await ws.ReceiveAsync(
+          new ArraySegment<byte>(buffer), CancellationToken.None);*/
+      }
+
     }
 
     public static async Task Echo(WebSocket ws)

@@ -152,21 +152,39 @@
       toast("lost connection to server");
     }
     socket.onmessage = function (event) {
-      toast(event.data);
+        console.log(event);
+      event.data.arrayBuffer().then((x) => {
+        const uint8Array = new Uint8Array(x);
+        console.log(uint8Array);
+        toast("from server: " + uint8Array[0]);
+        myPaddlePos = (uint8Array[0] % 20) * moveDist;
+      });
     }
 
     window.onkeydown = function (event) {
-      toast(event.code);
       if (event.code == "ArrowUp") {
-        myPaddlePos -= 30;
+        movePaddleUp();
       } else if (event.code == "ArrowDown") {
-        myPaddlePos += 30;
+        movePaddleDown();
       }
     }
-    window.onkeyup = function (event) {
-      console.log(event.code);
-      // TODO block multi-press from hold?
-      // e.g. upIsLocked = false
+
+    const moveDist = 30;
+    function movePaddleUp() {
+      var dist = -moveDist;
+      movePaddle(dist, "u");
+    }
+    function movePaddleDown() {
+      var dist = moveDist;
+      movePaddle(dist, "d");
+    }
+    function movePaddle(dist, data) {
+      myPaddlePos += dist;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        alert("socket not connected");
+      }
+      console.log(data);
+      socket.send(data);
     }
 
     setInterval(

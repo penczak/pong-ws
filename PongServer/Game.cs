@@ -11,8 +11,6 @@ namespace PongServer
     // ball vel? (maybe just for client optimism)
     // score
 
-    // TODO lobbies
-    //   (host creates lobby with name, guest can type lobby name to join host)
     PongClient Host { get; set; }
     PongClient Guest { get; set; }
 
