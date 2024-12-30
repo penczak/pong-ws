@@ -1,4 +1,6 @@
+using System.IO;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace PongServer
@@ -15,10 +17,6 @@ namespace PongServer
         KeepAliveInterval = TimeSpan.FromMinutes(5),
       };
 
-      // these dont seem to be necessary?
-      //webSocketOptions.AllowedOrigins.Add("https://localhost");
-      //webSocketOptions.AllowedOrigins.Add("http://localhost");
-
       app.UseWebSockets();
 
       app.UseDefaultFiles();
@@ -26,18 +24,25 @@ namespace PongServer
 
       app.Use(async (context, next) =>
       {
-        /*if (context.Request.Path == "/")
-        {
-          context.Response.StatusCode = StatusCodes.Status200OK;
-          await context.Response.BodyWriter.WriteAsync(File.ReadAllBytes("../client/ws-test.html"));
-        }*/
-
         if (context.Request.Path == "/ws")
         {
           if (context.WebSockets.IsWebSocketRequest)
           {
-            using var ws = await context.WebSockets.AcceptWebSocketAsync();
-            await Echo(ws);
+            try
+            {
+              using var ws = await context.WebSockets.AcceptWebSocketAsync();
+              await Echo(ws);
+            }
+            catch (System.Net.WebSockets.WebSocketException wsEx)
+            {
+              Console.WriteLine("Socket unexpectedly closed!");
+              if (wsEx?.Message == "The remote party closed the WebSocket connection without completing the close handshake.")
+              {
+                Console.WriteLine(wsEx.Message);
+                return;
+              }
+              throw;
+            }
           }
           else
           {

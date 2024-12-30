@@ -29,8 +29,32 @@
 
     .debug-toggle-container {
       position: absolute;
-      top: 20px;
+      bottom: 20px;
       right: 20px;
+    }
+
+    .toast {
+      color: black;
+      position: absolute;
+      z-index: 10000;
+      right: 25px;
+      top: 25px;
+      width: 15%;
+      background-color: #FFF;
+      min-width: 100px;
+      text-align: left;
+      border-radius: 10px 10px;
+      border: solid;
+      border-width: 1px;
+      border-color: #000;
+      vertical-align: top;
+      padding: 8px;
+      background-image: -ms-linear-gradient(top, #CCCCCC 0%, #FFFFFF 25px, #FFFFFF 100%);
+      background-image: -moz-linear-gradient(top, #CCCCCC 0%, #FFFFFF 25px, #FFFFFF 100%);
+      background-image: -o-linear-gradient(top, #CCCCCC 0%, #FFFFFF 25px, #FFFFFF 100%);
+      background-image: -webkit-linear-gradient(top, #CCCCCC 0%, #FFFFFF 25px, #FFFFFF 100%);
+      background-image: linear-gradient(to bottom, #CCCCCC 0%, #FFFFFF 25px, #FFFFFF 100%);
+      box-shadow: 3px 3px 5px #003;
     }
   </style>
 </head>
@@ -40,8 +64,11 @@
     <input type="checkbox" id="debug-toggle" />
   </div>
 
+
   <div id="pong-game">
-    PONG!!!!
+    <h2>PONG!!!!</h2>
+    <canvas id="cvs" height="600" width="800" style="border:1px solid #FFFFFF;">
+    </canvas>
   </div>
 
   <div id="ws-test" hidden>
@@ -89,6 +116,80 @@
     }
   </script>
 
+  <script>
+    function openWindow(id) {
+      var msgBox = document.createElement("div");
+      msgBox.innerHTML = `<div class="toast" style="visibility: hidden; cursor: pointer">
+  <p id="msgText" style="font-size: large; text-align:center; margin-top:0px; margin-bottom:0px;"></p>
+</div>`;
+      var float = document.getElementById(id);
+      float.style.visibility = 'visible';
+    }
+    function closeWindow(elem) {
+      document.body.removeChild(elem);
+    }
+    function toast(message, lifetime = 3000) {
+      var msgBox = document.createElement("div");
+      msgBox.innerHTML = `<div class="toast" style="cursor: pointer">
+  <p style="font-size: large; text-align:center; margin-top:0px; margin-bottom:0px;">${message}</p>
+</div>`;
+      msgBox.onclick = function () {
+        closeWindow(msgBox);
+      }
+      setTimeout(function () { closeWindow(msgBox); }, lifetime);
+      document.body.appendChild(msgBox);
+    }
+
+    var socket = new WebSocket("wss://localhost:7184/ws");
+
+    var myPaddlePos = 0;
+    var oppPaddlePos = 0;
+
+    socket.onopen = function (event) {
+      toast("connected to server!");
+    }
+    socket.onclose = function (event) {
+      toast("lost connection to server");
+    }
+    socket.onmessage = function (event) {
+      toast(event.data);
+    }
+
+    window.onkeydown = function (event) {
+      toast(event.code);
+      if (event.code == "ArrowUp") {
+        myPaddlePos -= 30;
+      } else if (event.code == "ArrowDown") {
+        myPaddlePos += 30;
+      }
+    }
+    window.onkeyup = function (event) {
+      console.log(event.code);
+      // TODO block multi-press from hold?
+      // e.g. upIsLocked = false
+    }
+
+    setInterval(
+      function () {
+        // TODO resize based on window size (but keep proportions of everything)
+        var hCvs = 600;
+        var wCvs = 800;
+
+        var paddleWidth = 15;
+        var paddleLength = 100;
+
+        var cvs = document.getElementById("cvs");
+        var ctx = cvs.getContext("2d");
+
+        ctx.clearRect(0, 0, cvs.height, cvs.width); // clear canvas
+        ctx.beginPath();
+        ctx.fillStyle = "white";
+        ctx.fillRect(30, myPaddlePos, paddleWidth, paddleLength);
+        //ctx.fillRect(290, oppPaddlePos, paddleWidth, paddleLength);
+      },
+      (1000 / 120) // 120 fps
+    )
+  </script>
 
   <script>
     var connectionUrl = document.getElementById("connectionUrl");
@@ -98,7 +199,7 @@
     var sendButton = document.getElementById("sendButton");
     var commsLog = document.getElementById("commsLog");
     var closeButton = document.getElementById("closeButton");
-    var socket;
+    var testSocket;
 
     var scheme = document.location.protocol === "https:" ? "wss" : "ws";
     var port = document.location.port ? (":" + document.location.port) : "";
@@ -120,10 +221,10 @@
       connectionUrl.disabled = true;
       connectButton.disabled = true;
 
-      if (!socket) {
+      if (!testSocket) {
         disable();
       } else {
-        switch (socket.readyState) {
+        switch (testSocket.readyState) {
           case WebSocket.CLOSED:
             stateLabel.innerHTML = "Closed";
             disable();
@@ -143,7 +244,7 @@
             enable();
             break;
           default:
-            stateLabel.innerHTML = "Unknown WebSocket State: " + htmlEscape(socket.readyState);
+            stateLabel.innerHTML = "Unknown WebSocket State: " + htmlEscape(testSocket.readyState);
             disable();
             break;
         }
@@ -151,19 +252,19 @@
     }
 
     closeButton.onclick = function () {
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
         alert("socket not connected");
       }
-      socket.close(1000, "Closing from client");
+      testSocket.close(1000, "Closing from client");
     };
 
     sendButton.onclick = function () {
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (!testSocket || testSocket.readyState !== WebSocket.OPEN) {
         alert("socket not connected");
       }
       var data = sendMessage.value;
       console.log(data);
-      socket.send(data);
+      testSocket.send(data);
       commsLog.innerHTML += '<tr>' +
         '<td class="commslog-client">Client</td>' +
         '<td class="commslog-server">Server</td>' +
@@ -172,21 +273,21 @@
 
     connectButton.onclick = function () {
       stateLabel.innerHTML = "Connecting";
-      socket = new WebSocket(connectionUrl.value);
-      socket.onopen = function (event) {
+      testSocket = new WebSocket(connectionUrl.value);
+      testSocket.onopen = function (event) {
         updateState();
         commsLog.innerHTML += '<tr>' +
           '<td colspan="3" class="commslog-data">Connection opened</td>' +
           '</tr>';
       };
-      socket.onclose = function (event) {
+      testSocket.onclose = function (event) {
         updateState();
         commsLog.innerHTML += '<tr>' +
           '<td colspan="3" class="commslog-data">Connection closed. Code: ' + htmlEscape(event.code) + '. Reason: ' + htmlEscape(event.reason) + '</td>' +
           '</tr>';
       };
-      socket.onerror = updateState;
-      socket.onmessage = function (event) {
+      testSocket.onerror = updateState;
+      testSocket.onmessage = function (event) {
         commsLog.innerHTML += '<tr>' +
           '<td class="commslog-server">Server</td>' +
           '<td class="commslog-client">Client</td>' +
