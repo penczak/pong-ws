@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text;
 
 namespace PongServer
 {
@@ -9,10 +10,28 @@ namespace PongServer
       var builder = WebApplication.CreateBuilder(args);
       var app = builder.Build();
 
+      var webSocketOptions = new WebSocketOptions
+      {
+        KeepAliveInterval = TimeSpan.FromMinutes(5),
+      };
+
+      // these dont seem to be necessary?
+      //webSocketOptions.AllowedOrigins.Add("https://localhost");
+      //webSocketOptions.AllowedOrigins.Add("http://localhost");
+
       app.UseWebSockets();
+
+      app.UseDefaultFiles();
+      app.UseStaticFiles();
 
       app.Use(async (context, next) =>
       {
+        /*if (context.Request.Path == "/")
+        {
+          context.Response.StatusCode = StatusCodes.Status200OK;
+          await context.Response.BodyWriter.WriteAsync(File.ReadAllBytes("../client/ws-test.html"));
+        }*/
+
         if (context.Request.Path == "/ws")
         {
           if (context.WebSockets.IsWebSocketRequest)
@@ -36,12 +55,23 @@ namespace PongServer
 
     public static async Task Echo(WebSocket ws)
     {
-      var buffer = new byte[1024 * 4];
+      Console.WriteLine("Socket opened");
+
+      var buffer = new byte[16];
       var recieveResult = await ws.ReceiveAsync(
         new ArraySegment<byte>(buffer), CancellationToken.None);
 
       while (!recieveResult.CloseStatus.HasValue)
       {
+        Console.WriteLine("Message Received (UTF8):");
+        Console.WriteLine(Encoding.UTF8.GetString(buffer));
+        Console.WriteLine("Bytes:");
+        foreach (var bt in buffer)
+        {
+          Console.WriteLine(bt.ToString("X4"));
+        }
+        Console.WriteLine();
+
         await ws.SendAsync(
           new ArraySegment<byte>(buffer, 0, recieveResult.Count),
           recieveResult.MessageType,
@@ -51,6 +81,7 @@ namespace PongServer
         recieveResult = await ws.ReceiveAsync(
           new ArraySegment<byte>(buffer), CancellationToken.None);
       }
+      Console.WriteLine("Socket closed: {0}", recieveResult.CloseStatus.ToString());
 
       await ws.CloseAsync(
         recieveResult.CloseStatus.Value,
