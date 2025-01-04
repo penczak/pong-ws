@@ -152,12 +152,16 @@
       toast("lost connection to server");
     }
     socket.onmessage = function (event) {
-        console.log(event);
+      console.log(event);
       event.data.arrayBuffer().then((x) => {
         const uint8Array = new Uint8Array(x);
         console.log(uint8Array);
+          console.log(uint8Array[0].toString(2));
+          console.log(uint8Array[1].toString(2));
+          console.log(uint8Array[2].toString(2));
+          console.log("");
         toast("from server: " + uint8Array[0]);
-        myPaddlePos = (uint8Array[0] % 20) * moveDist;
+        myPaddlePos = (uint8Array[0] & 0b01111100) * moveDist;
       });
     }
 
@@ -172,14 +176,14 @@
     const moveDist = 30;
     function movePaddleUp() {
       var dist = -moveDist;
-      movePaddle(dist, "u");
+      movePaddle(dist, 0b0);
     }
     function movePaddleDown() {
       var dist = moveDist;
-      movePaddle(dist, "d");
+      movePaddle(dist, 0b1);
     }
     function movePaddle(dist, data) {
-      myPaddlePos += dist;
+      //myPaddlePos += dist;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         alert("socket not connected");
       }

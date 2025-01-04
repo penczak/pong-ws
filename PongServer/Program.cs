@@ -1,12 +1,15 @@
 using System.IO;
 using System.Net.WebSockets;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace PongServer
 {
   public class Program
   {
+    public static WebSocket? First { get; set; }
+    public static WebSocket? Second { get; set; }
+    public static Game? Game { get; set; }
+
     public static void Main(string[] args)
     {
       var builder = WebApplication.CreateBuilder(args);
@@ -65,7 +68,55 @@ namespace PongServer
     {
       Console.WriteLine("Socket opened");
 
-      var buffer = new byte[16];
+      if (First == null)
+      {
+        First = ws;
+      /*}
+      else if (Second == null)
+      {*/
+        Second = ws;
+        Game = new Game(First, null);
+        while (ws.CloseStatus == null)
+        {
+          Console.WriteLine("waiting for client messagbe");
+          var buffer = new byte[1];
+          var recieveResult = await ws.ReceiveAsync(
+            new ArraySegment<byte>(buffer), CancellationToken.None);
+          Console.WriteLine("received client messagbe");
+          Console.WriteLine(buffer[0].ToString("B8"));
+          Console.WriteLine(buffer[0].ToString());
+          bool up = (buffer[0] & 0b1) == 0b0;
+
+          // update (both) client(s)
+          await Game.ProcessMoveRequest(PlayerType.Guest, up);
+
+        }
+        //_ = Task.Run(async () => await PingAndListen(First, PlayerType.Host));
+        //_ = Task.Run(async () => await PingAndListen(Second, PlayerType.Guest));
+      }
+    }
+
+    private static async Task PingAndListen(WebSocket ws, PlayerType playerType)
+    {
+      _ = Task.Run(async () =>
+      {
+        while (ws.CloseStatus == null)
+        {
+          Console.WriteLine("waiting for client messagbe");
+          var buffer = new byte[1];
+          var recieveResult = await ws.ReceiveAsync(
+            new ArraySegment<byte>(buffer), CancellationToken.None);
+          Console.WriteLine("received client messagbe");
+          Console.WriteLine(buffer[0].ToString("B8"));
+          Console.WriteLine(buffer[0].ToString());
+          var up = (buffer[0] & 0b1) == 0b0;
+          var down = (buffer[0] & 0b1) == 0b1;
+
+          // update (both) client(s)
+          await Game.ProcessMoveRequest(playerType, up);
+
+        }
+      });
 
       while (ws.CloseStatus == null)
       {
@@ -76,10 +127,7 @@ namespace PongServer
           CancellationToken.None);
 
         Thread.Sleep(500);
-        /*var recieveResult = await ws.ReceiveAsync(
-          new ArraySegment<byte>(buffer), CancellationToken.None);*/
       }
-
     }
 
     public static async Task Echo(WebSocket ws)
