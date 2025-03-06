@@ -2,9 +2,9 @@
 
 namespace PongServer
 {
-  public class PongClient
+  public class PongGameClient
   {
-    public PongClient(WebSocket ws, PlayerType playerType)
+    public PongGameClient(WebSocket ws, PlayerType playerType)
     {
       WebSocket = ws;
       PlayerType = playerType;
@@ -21,19 +21,19 @@ namespace PongServer
 
     public void MovePaddle(bool up)
     {
-      PaddlePos += up ? 1 : -1;
+      PaddlePos += up ? -1 : 1;
       ClampPaddlePos();
     }
 
     public void ClampPaddlePos()
     {
-      if (PaddlePos > PongClient.PaddleMax)
+      if (PaddlePos > PongGameClient.PaddleMax)
       {
-        PaddlePos = PongClient.PaddleMax;
+        PaddlePos = PongGameClient.PaddleMax;
       }
-      if (PaddlePos < PongClient.PaddleMin)
+      if (PaddlePos < PongGameClient.PaddleMin)
       {
-        PaddlePos = PongClient.PaddleMin;
+        PaddlePos = PongGameClient.PaddleMin;
       }
     }
   }

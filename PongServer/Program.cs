@@ -1,4 +1,4 @@
-using System.IO;
+using Microsoft.AspNetCore.Mvc;
 using System.Net.WebSockets;
 using System.Text;
 
@@ -6,9 +6,7 @@ namespace PongServer
 {
   public class Program
   {
-    public static WebSocket? First { get; set; }
-    public static WebSocket? Second { get; set; }
-    public static Game? Game { get; set; }
+    public static List<Lobby> Lobbies { get; set; } = new List<Lobby>();
 
     public static void Main(string[] args)
     {
@@ -25,6 +23,41 @@ namespace PongServer
       app.UseDefaultFiles();
       app.UseStaticFiles();
 
+      app.MapPost("/lobby", async (HttpContext context, [FromBody] CreateLobbyRequest request) =>
+      {
+        Console.WriteLine(request.LobbyName);
+        if (Lobbies.Any(l => l.Key == request.LobbyName))
+        {
+          context.Response.StatusCode = StatusCodes.Status409Conflict;
+          await context.Response.WriteAsync($"Lobby with key {request.LobbyName} already exists.");
+          return;
+        }
+
+        var lobby = new Lobby(request.LobbyName, request.PlayerName);
+        Lobbies.Add(lobby);
+
+        context.Response.StatusCode = StatusCodes.Status201Created;
+        await context.Response.WriteAsync(lobby.Key); // instructs client to open ws and send this key
+      });
+
+      app.MapPost("/join", async (HttpContext context, [FromBody] CreateLobbyRequest request) =>
+      {
+        Console.WriteLine(request.LobbyName);
+        var lobby = Lobbies.FirstOrDefault(l => l.Key == request.LobbyName && l.Game.Guest == null); // todo could message user if guest is taken
+        if (lobby == null)
+        {
+          context.Response.StatusCode = StatusCodes.Status404NotFound;
+          // TODO let client see list of lobbies?
+          await context.Response.WriteAsync($"Lobby with key {request.LobbyName} was not found.");
+          return;
+        }
+
+        lobby.GuestName = request.PlayerName;
+
+        context.Response.StatusCode = StatusCodes.Status202Accepted;
+        await context.Response.WriteAsync(lobby.Key); // instructs client to open ws and send this key
+      });
+
       app.Use(async (context, next) =>
       {
         // TODO lobbies
@@ -37,7 +70,35 @@ namespace PongServer
             try
             {
               using var ws = await context.WebSockets.AcceptWebSocketAsync();
-              await Handle(ws);
+
+              var buffer = new byte[64];
+              var recieveResult = await ws.ReceiveAsync(
+                new ArraySegment<byte>(buffer), CancellationToken.None);
+
+              if (recieveResult.CloseStatus.HasValue)
+              {
+                Console.WriteLine("Did not receive expected lobby key as first message from socket.");
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+              }
+              string lobbyKey = Encoding.UTF8.GetString(buffer, 0, recieveResult.Count);
+              Console.WriteLine($"Lobby key: {lobbyKey}");
+              var lobby = Lobbies.FirstOrDefault(l => l.Key == lobbyKey);
+              if (lobby == null)
+              {
+                Console.WriteLine("Lobby not found.");
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+              }
+              if (lobby.Game.Host == null)
+              {
+                await lobby.HandleHost(ws);
+              }
+              else if (lobby.Game.Guest == null)
+              {
+                await lobby.HandleGuest(ws);
+              }
+
             }
             catch (System.Net.WebSockets.WebSocketException wsEx)
             {
@@ -64,39 +125,30 @@ namespace PongServer
       app.Run();
     }
 
-    private static async Task Handle(WebSocket ws)
+    /*private static async Task Handle(WebSocket ws, Lobby lobby)
     {
       Console.WriteLine("Socket opened");
-
-      if (First == null)
+      //await Echo(ws);
+      while (ws.CloseStatus == null)
       {
-        First = ws;
-      /*}
-      else if (Second == null)
-      {*/
-        Second = ws;
-        Game = new Game(First, null);
-        while (ws.CloseStatus == null)
-        {
-          Console.WriteLine("waiting for client messagbe");
-          var buffer = new byte[1];
-          var recieveResult = await ws.ReceiveAsync(
-            new ArraySegment<byte>(buffer), CancellationToken.None);
-          Console.WriteLine("received client messagbe");
-          Console.WriteLine(buffer[0].ToString("B8"));
-          Console.WriteLine(buffer[0].ToString());
-          bool up = (buffer[0] & 0b1) == 0b0;
+        Console.WriteLine("waiting for client messagbe");
+        var buffer = new byte[1];
+        var recieveResult = await ws.ReceiveAsync(
+          new ArraySegment<byte>(buffer), CancellationToken.None);
+        Console.WriteLine("received client messagbe");
+        Console.WriteLine(buffer[0].ToString("B8"));
+        Console.WriteLine(buffer[0].ToString());
+        bool up = (buffer[0] & 0b1) == 0b0;
 
-          // update (both) client(s)
-          await Game.ProcessMoveRequest(PlayerType.Guest, up);
+        // update (both) client(s)
+        await lobby.Game.ProcessMoveRequest(PlayerType.Guest, up);
 
-        }
-        //_ = Task.Run(async () => await PingAndListen(First, PlayerType.Host));
-        //_ = Task.Run(async () => await PingAndListen(Second, PlayerType.Guest));
       }
-    }
+      //_ = Task.Run(async () => await PingAndListen(First, PlayerType.Host));
+      //_ = Task.Run(async () => await PingAndListen(Second, PlayerType.Guest));
+    }*/
 
-    private static async Task PingAndListen(WebSocket ws, PlayerType playerType)
+    /*private static async Task PingAndListen(WebSocket ws, PlayerType playerType)
     {
       _ = Task.Run(async () =>
       {
@@ -128,7 +180,7 @@ namespace PongServer
 
         Thread.Sleep(500);
       }
-    }
+    }*/
 
     public static async Task Echo(WebSocket ws)
     {

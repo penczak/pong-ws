@@ -67,7 +67,26 @@
 
   <div id="pong-game">
     <h2>PONG!!!!</h2>
-    <canvas id="cvs" height="600" width="800" style="border:1px solid #FFFFFF;">
+    <input hidden disabled id="lobbyName" type="text" value="" />
+    <div id="lobbyMenu">
+      <div id="lobbyMenuMain">
+        <button onclick="hide('lobbyMenuMain');show('lobbyMenuCreate');">create</button>
+        <button onclick="hide('lobbyMenuMain');show('lobbyMenuJoin');">join</button>
+      </div>
+      <div hidden id="lobbyMenuCreate">
+        <button onclick="hide('lobbyMenuCreate');show('lobbyMenuMain');">back</button>
+        <label for="lobbyName">Lobby Name</label>
+        <input id="createLobbyName" type="text" name="lobbyName" value="" />
+        <button id="createLobby" onclick="createLobby()">create</button>
+      </div>
+      <div hidden id="lobbyMenuJoin">
+        <button onclick="hide('lobbyMenuJoin');show('lobbyMenuMain');">back</button>
+        <label for="lobbyName">Lobby Name</label>
+        <input id="joinLobbyName" type="text" name="lobbyName" value="" />
+        <button id="joinLobby" onclick="joinLobby()">join</button>
+      </div>
+    </div>
+    <canvas hidden id="cvs" height="600" width="800" style="border:1px solid #FFFFFF;">
     </canvas>
   </div>
 
@@ -117,6 +136,63 @@
   </script>
 
   <script>
+    function hide(id) {
+      var el = document.getElementById(id);
+      el.hidden = true;
+    }
+    function show(id) {
+      var el = document.getElementById(id);
+      el.hidden = false;
+    }
+    function createLobby() {
+      console.log("create");
+      //hide("lobbyMenuMain");
+      //show("lobbyMenuCreate");
+      var lobbyName = document.getElementById('createLobbyName').value;
+      if (!lobbyName) {
+        return;
+      }
+      fetch('/lobby', {
+        method: 'POST',
+        body: JSON.stringify({ lobbyName: lobbyName, playerName: "thomas" }),
+        headers: { "Content-Type": "application/json" }
+      }).then(
+        (res) => {
+          console.log(res);
+          if (res.status !== 201) {
+            console.error(res);
+            return;
+          }
+          openSocket(lobbyName);
+        }
+      );
+    }
+    function joinLobby() {
+      console.log("join");
+      //hide("lobbyMenuMain");
+      //show("lobbyMenuCreate");
+      var lobbyName = document.getElementById('joinLobbyName').value;
+      if (!lobbyName) {
+        return;
+      }
+      fetch('/join', {
+        method: 'POST',
+        body: JSON.stringify({ lobbyName: lobbyName, playerName: "thomas" }),
+        headers: { "Content-Type": "application/json" }
+      }).then(
+        (res) => {
+          console.log(res);
+          if (res.status !== 202) {
+            console.error(res);
+            return;
+          }
+          openSocket(lobbyName);
+        }
+      );
+    }
+  </script>
+
+  <script>
     function openWindow(id) {
       var msgBox = document.createElement("div");
       msgBox.innerHTML = `<div class="toast" style="visibility: hidden; cursor: pointer">
@@ -129,6 +205,7 @@
       document.body.removeChild(elem);
     }
     function toast(message, lifetime = 3000) {
+      console.log("(t): " + message);
       var msgBox = document.createElement("div");
       msgBox.innerHTML = `<div class="toast" style="cursor: pointer">
   <p style="font-size: large; text-align:center; margin-top:0px; margin-bottom:0px;">${message}</p>
@@ -140,77 +217,92 @@
       document.body.appendChild(msgBox);
     }
 
-    var socket = new WebSocket("wss://localhost:7184/ws");
-
-    var myPaddlePos = 0;
-    var oppPaddlePos = 0;
-
-    socket.onopen = function (event) {
-      toast("connected to server!");
-    }
-    socket.onclose = function (event) {
-      toast("lost connection to server");
-    }
-    socket.onmessage = function (event) {
-      console.log(event);
-      event.data.arrayBuffer().then((x) => {
-        const uint8Array = new Uint8Array(x);
-        console.log(uint8Array);
-          console.log(uint8Array[0].toString(2));
-          console.log(uint8Array[1].toString(2));
-          console.log(uint8Array[2].toString(2));
-          console.log("");
-        toast("from server: " + uint8Array[0]);
-        myPaddlePos = (uint8Array[0] & 0b01111100) * moveDist;
-      });
+    function leftPad(str, totalLen) {
+      return "0".repeat(totalLen - str.length) + str;
     }
 
-    window.onkeydown = function (event) {
-      if (event.code == "ArrowUp") {
-        movePaddleUp();
-      } else if (event.code == "ArrowDown") {
-        movePaddleDown();
+    function openSocket(lobbyName) {
+      var cvs = document.getElementById("cvs");
+      cvs.hidden = false;
+      //var socket = new WebSocket("/ws", "wss");
+      var socket = new WebSocket("wss://localhost:7184/ws"); // TODO dont hard-code localhost
+
+      var myPaddlePos = 0;
+      var oppPaddlePos = 0;
+
+      socket.onopen = function (event) {
+        toast(`connection to server established! now connecting to lobby ${lobbyName}.`);
+        socket.send(lobbyName);
       }
-    }
-
-    const moveDist = 30;
-    function movePaddleUp() {
-      var dist = -moveDist;
-      movePaddle(dist, 0b0);
-    }
-    function movePaddleDown() {
-      var dist = moveDist;
-      movePaddle(dist, 0b1);
-    }
-    function movePaddle(dist, data) {
-      //myPaddlePos += dist;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        alert("socket not connected");
+      socket.onclose = function (event) {
+        toast("lost connection to server");
       }
-      console.log(data);
-      socket.send(data);
+      socket.onmessage = function (event) {
+        console.log(event);
+        event.data.arrayBuffer().then((x) => {
+          const uint8Array = new Uint8Array(x);
+          console.log(uint8Array);
+            console.log(leftPad(uint8Array[0].toString(2), 8));
+            console.log(leftPad(uint8Array[1].toString(2), 8));
+            console.log(leftPad(uint8Array[2].toString(2), 8));
+            console.log("");
+          //toast("from server: " + uint8Array[0]);
+          var newMyPos = ((uint8Array[0] & 0b01111100) >> 2);
+          var newOppPos = ((uint8Array[0] & 0b00000011) << 3) | ((uint8Array[1] & 0b11100000) >> 5)
+          console.log(`my pos: ${newMyPos}`);
+          console.log(`opp pos: ${newOppPos}`);
+          myPaddlePos = newMyPos * moveDist;
+          oppPaddlePos = newOppPos * moveDist;
+        });
+      }
+
+      window.onkeydown = function (event) {
+        if (event.code == "ArrowUp") {
+          movePaddleUp();
+        } else if (event.code == "ArrowDown") {
+          movePaddleDown();
+        }
+      }
+
+      const moveDist = 30;
+      function movePaddleUp() {
+        var dist = -moveDist;
+        movePaddle(dist, 0b0);
+      }
+      function movePaddleDown() {
+        var dist = moveDist;
+        movePaddle(dist, 0b1);
+      }
+      function movePaddle(dist, data) {
+        //myPaddlePos += dist; // for optimistic rendering
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          alert("socket not connected");
+        }
+        console.log(data);
+        socket.send(data);
+      }
+
+      setInterval(
+        function () {
+          // TODO resize based on window size (but keep proportions of everything)
+          var hCvs = 600;
+          var wCvs = 800;
+
+          var paddleWidth = 15;
+          var paddleLength = 100;
+
+          var cvs = document.getElementById("cvs");
+          var ctx = cvs.getContext("2d");
+
+          ctx.clearRect(0, 0, cvs.height, cvs.width); // clear canvas
+          ctx.beginPath();
+          ctx.fillStyle = "white";
+          ctx.fillRect(30, myPaddlePos, paddleWidth, paddleLength);
+          ctx.fillRect(290, oppPaddlePos, paddleWidth, paddleLength);
+        },
+        (1000 / 120) // 120 fps
+      )
     }
-
-    setInterval(
-      function () {
-        // TODO resize based on window size (but keep proportions of everything)
-        var hCvs = 600;
-        var wCvs = 800;
-
-        var paddleWidth = 15;
-        var paddleLength = 100;
-
-        var cvs = document.getElementById("cvs");
-        var ctx = cvs.getContext("2d");
-
-        ctx.clearRect(0, 0, cvs.height, cvs.width); // clear canvas
-        ctx.beginPath();
-        ctx.fillStyle = "white";
-        ctx.fillRect(30, myPaddlePos, paddleWidth, paddleLength);
-        //ctx.fillRect(290, oppPaddlePos, paddleWidth, paddleLength);
-      },
-      (1000 / 120) // 120 fps
-    )
   </script>
 
   <script>
