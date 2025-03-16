@@ -15,6 +15,13 @@ public class Game
   public PongGameClient? Guest { get; set; }
   public int BallY { get; set; } = 0;
   public int BallX { get; set; } = 0;
+  public float BallAlpha { get; set; }
+
+  public const int BallMax = 63;
+  public const int BallMin = 0;
+
+  public bool IsOpen => Host?.WebSocket.State == WebSocketState.Open
+                      && Guest?.WebSocket.State == WebSocketState.Open;
 
   public Game SetHost(WebSocket hostWs)
   {
@@ -28,21 +35,6 @@ public class Game
     return this;
   }
 
-  /*public async Task ProcessMoveRequest(PlayerType playerType, bool up)
-  {
-    switch (playerType)
-    {
-      case PlayerType.Host:
-        Host!.MovePaddle(up);
-        break;
-      case PlayerType.Guest:
-        Guest!.MovePaddle(up);
-        break;
-    }
-
-    await SendUpdateToClients();
-  }*/
-
   public async Task SendUpdateToClients()
   {
     await Host!.WebSocket.SendAsync(new ArraySegment<byte>(
@@ -54,7 +46,7 @@ public class Game
         BallX
       )
     ), WebSocketMessageType.Binary, true, CancellationToken.None);
-    if (Guest != null)
+    if (Guest?.WebSocket.State == WebSocketState.Open)
     {
       await Guest.WebSocket.SendAsync(new ArraySegment<byte>(
       GetMessageForClients(
@@ -62,7 +54,7 @@ public class Game
         Guest?.PaddlePos ?? 0, // guest pos first
         Host?.PaddlePos ?? 0,
         BallY,
-        BallX
+        -BallX + Game.BallMax // invert X
       )
     ), WebSocketMessageType.Binary, true, CancellationToken.None);
     }

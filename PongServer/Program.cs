@@ -25,7 +25,7 @@ namespace PongServer
 
       app.MapPost("/lobby", async (HttpContext context, [FromBody] CreateLobbyRequest request) =>
       {
-        Console.WriteLine(request.LobbyName);
+        // Console.WriteLine(request.LobbyName);
         if (Lobbies.Any(l => l.Key == request.LobbyName))
         {
           context.Response.StatusCode = StatusCodes.Status409Conflict;
@@ -96,9 +96,11 @@ namespace PongServer
               }
               else if (lobby.Game.Guest == null)
               {
-                await lobby.HandleGuest(ws);
+                await Task.WhenAll(
+                  lobby.HandleGuest(ws),
+                  lobby.HandleBall()
+                );
               }
-
             }
             catch (System.Net.WebSockets.WebSocketException wsEx)
             {

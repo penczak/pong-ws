@@ -31,16 +31,27 @@ public class Lobby(string key, string hostName)
       await Game.SendUpdateToClients();
     }
   }
+  public async Task HandleBall()
+  {
+    while (Game.IsOpen)
+    {
+      Game.BallAlpha = 0;
+      Game.BallX += 1;
+      Game.BallY += 1;
+      await Game.SendUpdateToClients();
+      Thread.Sleep(100);
+    }
+  }
 
   private static async Task<bool> GetNextMessage(WebSocket ws)
   {
-    Console.WriteLine("waiting for client messagbe");
+    // Console.WriteLine("waiting for client messagbe");
     var buffer = new byte[1]; // client sends only one bit message
     var recieveResult = await ws.ReceiveAsync(
       new ArraySegment<byte>(buffer), CancellationToken.None);
-    Console.WriteLine("received client messagbe");
-    Console.WriteLine(buffer[0].ToString("B8"));
-    Console.WriteLine(buffer[0].ToString());
+    // Console.WriteLine("received client messagbe");
+    // Console.WriteLine(buffer[0].ToString("B8"));
+    // Console.WriteLine(buffer[0].ToString());
     bool up = (buffer[0] & 0b1) == 0b0;
     return up;
   }

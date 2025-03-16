@@ -144,11 +144,10 @@
       var el = document.getElementById(id);
       el.hidden = false;
     }
-    function createLobby() {
-      console.log("create");
+    function createLobby(key) {
       //hide("lobbyMenuMain");
       //show("lobbyMenuCreate");
-      var lobbyName = document.getElementById('createLobbyName').value;
+      var lobbyName = key || document.getElementById('createLobbyName').value;
       if (!lobbyName) {
         return;
       }
@@ -167,11 +166,11 @@
         }
       );
     }
-    function joinLobby() {
+    function joinLobby(key) {
       console.log("join");
       //hide("lobbyMenuMain");
       //show("lobbyMenuCreate");
-      var lobbyName = document.getElementById('joinLobbyName').value;
+      var lobbyName = key || document.getElementById('joinLobbyName').value;
       if (!lobbyName) {
         return;
       }
@@ -224,11 +223,18 @@
     function openSocket(lobbyName) {
       var cvs = document.getElementById("cvs");
       cvs.hidden = false;
+
       //var socket = new WebSocket("/ws", "wss");
-      var socket = new WebSocket("wss://localhost:7184/ws"); // TODO dont hard-code localhost
+      //var scheme = document.location.protocol === "https:" ? "wss" : "ws";
+      //var port = document.location.port ? (":" + document.location.port) : "";
+      //connectionUrl.value = scheme + "://" + document.location.hostname + port + "/ws";
+      // TODO dont hard-code localhost
+      var socket = new WebSocket("wss://localhost:7184/ws");
 
       var myPaddlePos = 0;
       var oppPaddlePos = 0;
+      var ballX = 0;
+      var ballY = 0;
 
       socket.onopen = function (event) {
         toast(`connection to server established! now connecting to lobby ${lobbyName}.`);
@@ -238,21 +244,26 @@
         toast("lost connection to server");
       }
       socket.onmessage = function (event) {
-        console.log(event);
+        //console.log(event);
         event.data.arrayBuffer().then((x) => {
           const uint8Array = new Uint8Array(x);
-          console.log(uint8Array);
-            console.log(leftPad(uint8Array[0].toString(2), 8));
-            console.log(leftPad(uint8Array[1].toString(2), 8));
-            console.log(leftPad(uint8Array[2].toString(2), 8));
-            console.log("");
+          //  console.log(uint8Array);
+          //  console.log(leftPad(uint8Array[0].toString(2), 8));
+          //  console.log(leftPad(uint8Array[1].toString(2), 8));
+          //  console.log(leftPad(uint8Array[2].toString(2), 8));
+          //  console.log("");
           //toast("from server: " + uint8Array[0]);
           var newMyPos = ((uint8Array[0] & 0b01111100) >> 2);
           var newOppPos = ((uint8Array[0] & 0b00000011) << 3) | ((uint8Array[1] & 0b11100000) >> 5)
+          var newBallY = ((uint8Array[1] & 0b00011111) << 1) | ((uint8Array[2] & 0b10000000) >> 7);
+          var newBallX = (uint8Array[2] & 0b01111111);
           console.log(`my pos: ${newMyPos}`);
           console.log(`opp pos: ${newOppPos}`);
+          console.log(`ball pos: (${newBallX}, ${newBallY})`);
           myPaddlePos = newMyPos * moveDist;
           oppPaddlePos = newOppPos * moveDist;
+          ballX = newBallX;
+          ballY = newBallY;
         });
       }
 
@@ -295,10 +306,13 @@
           var ctx = cvs.getContext("2d");
 
           ctx.clearRect(0, 0, cvs.height, cvs.width); // clear canvas
-          ctx.beginPath();
           ctx.fillStyle = "white";
           ctx.fillRect(30, myPaddlePos, paddleWidth, paddleLength);
           ctx.fillRect(290, oppPaddlePos, paddleWidth, paddleLength);
+          ctx.beginPath();
+          // arc x, y, radius, startAngle, endAngle
+          ctx.arc(ballX * moveDist, ballY * moveDist, 25, 0, 2 * Math.PI);
+          ctx.fill();
         },
         (1000 / 120) // 120 fps
       )
